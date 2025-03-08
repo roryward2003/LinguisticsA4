@@ -12,6 +12,8 @@ from sympy.parsing.sympy_parser import parse_expr
 np.random.seed(0)
 nltk.download('word2vec_sample')
 
+# type: ignore (suppress VSCode warnings about filename)
+
 ########-------------- PART 1: LANGUAGE MODELING --------------########
 
 class NgramLM:
@@ -35,7 +37,7 @@ class NgramLM:
 		Returns
 		-------
 		"""
-		with open("data/tweets/covid-tweets-2020-08-10-2020-08-21.trigrams.txt") as f:
+		with open("data/tweets/covid-tweets-2020-08-10-2020-08-21.trigrams.txt", encoding="utf-8") as f:
 			lines = f.readlines()
 			for line in lines:
 				word1, word2, word3, count = line.strip().split()
@@ -65,11 +67,21 @@ class NgramLM:
 		probs: list
 			The probabilities corresponding to the retrieved words.
 		"""
-		next_words = []
-		probs = []
 
-		# write your code here
-		pass
+		# Prep some data so we don't need to repeatedly calucalte this value later on
+		sumOfWeights = sum(self.bigram_prefix_to_trigram_weights[(word1, word2)])
+
+		# Create a dict of (word, numOccurences) for the top n words
+		indices = np.argpartition(self.bigram_prefix_to_trigram_weights[(word1, word2)], -n)[-n:]
+		topn = dict([(self.bigram_prefix_to_trigram[(word1, word2)][i],
+			self.bigram_prefix_to_trigram_weights[(word1, word2)][i]) for i in indices])
+		
+		# Sort the dict by value, descending, then split into two lists
+		topnSorted = dict(sorted(topn.items(), key=lambda item: item[1], reverse=True))
+		next_words = list(topnSorted.keys())
+		
+		# The second list requires some processing to convert from frequency to probability
+		probs = [val/sumOfWeights for val in topnSorted.values()]
 
 		return next_words, probs
 	
@@ -93,11 +105,14 @@ class NgramLM:
 		probs: list
 			The probabilities corresponding to the retrieved words.
 		"""
-		next_words = []
-		probs = []
+		# Prep some data so we don't need to repeatedly calucalte this value later on
+		sumOfWeights = sum(self.bigram_prefix_to_trigram_weights[(word1, word2)])
+		allProbs = [val/sumOfWeights for val in self.bigram_prefix_to_trigram_weights[(word1, word2)]]
 
-		# write your code here
-		pass
+		# Choose a sample of
+		next_words = np.random.choice(self.bigram_prefix_to_trigram[(word1, word2)], size=n, replace=False, p=allProbs)
+		indices = [self.bigram_prefix_to_trigram[(word1, word2)].index(word) for word in next_words]		
+		probs = [self.bigram_prefix_to_trigram_weights[(word1, word2)][i]/sumOfWeights for i in indices]
 
 		return next_words, probs
 	
