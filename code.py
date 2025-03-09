@@ -47,6 +47,8 @@ class NgramLM:
 				self.bigram_prefix_to_trigram[(word1, word2)].append(word3)
 				self.bigram_prefix_to_trigram_weights[(word1, word2)].append(int(count))
 
+		# [print(word) for word in self.bigram_prefix_to_trigram[("mandate", "masks")]]
+
 	def top_next_word(self, word1, word2, n=10):
 		"""
 		Retrieve top n next words and their probabilities given a bigram prefix.
@@ -68,20 +70,35 @@ class NgramLM:
 			The probabilities corresponding to the retrieved words.
 		"""
 
-		# Prep some data so we don't need to repeatedly calucalte this value later on
+		# If no next words available, return a list of "<EOS>"
+		if (word1, word2) not in self.bigram_prefix_to_trigram_weights:
+			return ["<EOS>"]*n, [0.0]*n
+		
+		# Ensure n is safe for use (avoid attempted oversampling)
+		if len(self.bigram_prefix_to_trigram_weights[(word1, word2)])<n:
+			safe_n = len(self.bigram_prefix_to_trigram_weights[(word1, word2)])
+		else:
+			safe_n = n
+
+		# Prep some data so we don't need to repeatedly caluclate this value later on
 		sumOfWeights = sum(self.bigram_prefix_to_trigram_weights[(word1, word2)])
 
 		# Create a dict of (word, numOccurences) for the top n words
-		indices = np.argpartition(self.bigram_prefix_to_trigram_weights[(word1, word2)], -n)[-n:]
+		indices = np.argpartition(self.bigram_prefix_to_trigram_weights[(word1, word2)], -safe_n)[-safe_n:]
 		topn = dict([(self.bigram_prefix_to_trigram[(word1, word2)][i],
 			self.bigram_prefix_to_trigram_weights[(word1, word2)][i]) for i in indices])
 		
 		# Sort the dict by value, descending, then split into two lists
-		topnSorted = dict(sorted(topn.items(), key=lambda item: item[1], reverse=True))
+		topnSorted = dict(sorted(topn.items(), key=lambda item: (-item[1], item[0])))
+
 		next_words = list(topnSorted.keys())
 		
 		# The second list requires some processing to convert from frequency to probability
-		probs = [val/sumOfWeights for val in topnSorted.values()]
+		probs = [float(val/sumOfWeights) for val in topnSorted.values()]
+
+		while len(probs)<n:
+			probs.append(0.0)
+			next_words.append("<EOS>")
 
 		return next_words, probs
 	
@@ -105,15 +122,29 @@ class NgramLM:
 		probs: list
 			The probabilities corresponding to the retrieved words.
 		"""
+		# If no next words available, return a list of "<EOS>"
+		if (word1, word2) not in self.bigram_prefix_to_trigram_weights:
+			return ["<EOS>"]*n, [0.0]*n
+		
+		# Ensure n is safe for use (avoid attempted oversampling)
+		if len(self.bigram_prefix_to_trigram_weights[(word1, word2)])<n:
+			safe_n = len(self.bigram_prefix_to_trigram_weights[(word1, word2)])
+		else:
+			safe_n = n
+		
 		# Prep some data so we don't need to repeatedly calucalte this value later on
 		sumOfWeights = sum(self.bigram_prefix_to_trigram_weights[(word1, word2)])
 		allProbs = [val/sumOfWeights for val in self.bigram_prefix_to_trigram_weights[(word1, word2)]]
 
 		# Choose a sample of
-		next_words = np.random.choice(self.bigram_prefix_to_trigram[(word1, word2)], size=n, replace=False, p=allProbs)
+		next_words = list(np.random.choice(self.bigram_prefix_to_trigram[(word1, word2)], size=safe_n, replace=False, p=allProbs))
 		indices = [self.bigram_prefix_to_trigram[(word1, word2)].index(word) for word in next_words]		
 		probs = [self.bigram_prefix_to_trigram_weights[(word1, word2)][i]/sumOfWeights for i in indices]
 
+		while len(probs)<n:
+			probs.append(0.0)
+			next_words.append("<EOS>")
+		
 		return next_words, probs
 	
 	def generate_sentences(self, prefix, beam=10, sampler=top_next_word, max_len=20):
@@ -138,13 +169,51 @@ class NgramLM:
 		probs: list
 			The probabilities corresponding to the generated sentences
 		"""
-		sentences = []
-		probs = []
 
-		# write your code here
-		pass
+		prefix_words = prefix.split()
+		word1 = prefix_words[len(prefix_words)-2]
+		word2 = prefix_words[len(prefix_words)-1]
 
-		return sentences, probs
+		next_words, next_probs = sampler(word1, word2, beam)
+
+		best_sentences = [prefix_words.copy() for _ in range(beam)]
+		[best_sentences[i].append(next_words[i]) for i in range(beam)]
+
+		best_probs = next_probs.copy()
+		next_sentences = []
+		next_sentence_probs = []
+
+		# Iterate until max_len-1 reached
+		for i in range(len(prefix_words), max_len-1):
+			for j in range(beam):
+				if best_sentences[j][len(best_sentences[j])-1] == "<EOS>":
+					next_sentences.append(best_sentences[j].copy())
+					next_sentence_probs.append(best_probs[j])
+				else:
+					next_words, next_probs = sampler(best_sentences[j][len(best_sentences[j])-2],
+						best_sentences[j][len(best_sentences[j])-1], beam)
+					for k in range(beam):
+						temp = best_sentences[j].copy()
+						temp.append(next_words[k])
+						next_sentences.append(temp)
+						next_sentence_probs.append(best_probs[j]*next_probs[k])
+			best_indices = np.argpartition(next_sentence_probs, -beam)[-beam:]
+			best_sentences = [next_sentences[index].copy() for index in best_indices]
+			best_probs = [next_sentence_probs[index] for index in best_indices]
+			next_sentence_probs = []
+			next_sentences = []
+
+		# Append <EOS> to any sentences that don't already end in <EOS>
+		for i in range(len(best_sentences)):
+			if best_sentences[i][len(best_sentences[i])-1] != "<EOS>":
+				best_sentences[i].append("<EOS>")
+
+
+		best_dict = dict([(" ".join(best_sentences[i]), best_probs[i]) for i in range(len(best_sentences))])
+		# Sort the dict by value, descending, then split into two lists
+		sorted_dict = dict(sorted(best_dict.items(), key=lambda item: (-item[1], item[0])))
+
+		return list(sorted_dict.keys()), list(sorted_dict.values())
 
 
 
