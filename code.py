@@ -7,9 +7,11 @@ import nltk
 from nltk.data import find
 import gensim
 import sklearn
+import sklearn.discriminant_analysis
 import sklearn.gaussian_process
 import sklearn.linear_model
 import sklearn.neighbors
+import sklearn.neural_network
 from sympy.parsing.sympy_parser import parse_expr
 
 np.random.seed(0)
@@ -399,7 +401,6 @@ class Text2SQLParser:
 		sentence_vector: np.ndarray
 			The representation of the sentence.
 		"""
-		# Fill in your code here
 		sentence_vector = np.zeros(300)
 		split = sentence.split()
 
@@ -711,6 +712,33 @@ class MathParser:
 		"""
 		self.train_df = pd.read_csv(self.parser_files + "/" + self.train_file, sep="\t")
 		self.test_df = pd.read_csv(self.parser_files + "/" + self.test_file, sep="\t")
+
+	def get_sentence_representation(self, sentence):
+		"""
+		Gives the average word2vec representation of a sentence.
+
+		Parameters
+		----------
+		sentence: str
+			The sentence whose representation is to be returned.
+			
+		Returns
+		-------
+		sentence_vector: np.ndarray
+			The representation of the sentence.
+		"""
+		sentence_vector = np.zeros(300)
+		split = sentence.split()
+
+		word_vecs = []
+		
+		for word in split:
+			if word in self.word2vec_model:
+				word_vecs.append(self.word2vec_model[word])
+
+		sentence_vector = np.average(np.array(word_vecs), axis=0)
+			
+		return sentence_vector
 	
 	def init_model(self):
 		"""
@@ -722,8 +750,89 @@ class MathParser:
 		Returns
 		-------
 		"""
-		# Fill in your code here
-		pass
+
+		# self.classifier = sklearn.svm.SVC(gamma=2, C=1)                                # 29.6 |
+		# self.opclassifier = sklearn.svm.SVC(gamma=1, C=1)                              # 22.2 | 21.5
+		# self.classifier = sklearn.svm.SVC(gamma=10, C=5)                               # 33.3 | 32.7
+
+		# self.opclassifier = sklearn.neighbors.KNeighborsClassifier()                 # 44.4 | 29.9
+		# self.invclassifier = sklearn.neighbors.KNeighborsClassifier()                # 44.4 | 29.9
+		
+		# self.invclassifier = sklearn.naive_bayes.GaussianNB()                        # 37.0 | 25.2
+		# self.opclassifier = sklearn.neighbors.KNeighborsClassifier()                 # 37.0 | 25.2
+
+ 		# 33.3 | 32.7
+		# self.invclassifier = sklearn.linear_model.LogisticRegression(
+		# 	solver='liblinear',
+		# 	penalty='l2',
+		# 	C=15,
+		# 	max_iter=1000
+		# )
+		# 	kernel='rbf',
+		# 	gamma=10,
+		# 	C=5.0,
+		# 	decision_function_shape='ovr'
+		# )
+
+		# self.classifier = sklearn.neighbors.KNeighborsClassifier()                     # 48.1 | 25
+		# self.classifier = sklearn.neighbors.KNeighborsClassifier(1)                    # 48.1 |
+		# self.classifier = sklearn.neighbors.KNeighborsClassifier(20)                   # 40.7 |
+
+		# self.classifier = sklearn.gaussian_process.GaussianProcessClassifier           # 25.9 | 22.4
+		# self.classifier = sklearn.linear_model.LogisticRegression()                    # 25.9 |
+		# self.classifier = sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis()# 22.2 | 23.4
+
+		# 48.1 | 
+		# self.opclassifier = sklearn.naive_bayes.GaussianNB()                             # 44.4 | 32.7
+		self.opclassifier = sklearn.svm.SVC(gamma=10, C=5)                               # 33.3 | 32.7
+		self.invclassifier = sklearn.ensemble.RandomForestClassifier(max_depth=5,
+			n_estimators=10, max_features=1, random_state=42)                            # 37.0 | 29.9
+		
+		# self.opclassifier = sklearn.neural_network.MLPClassifier(alpha=1,
+		# 	max_iter=1000, random_state=42)                       # 33.3 | 32.7
+
+		self.train_models()
+
+	def train_models(self):
+		"""
+		Initializes the ML classifier.
+
+		Parameters
+		----------
+			
+		Returns
+		-------
+		"""
+		questions = []
+		ops = []
+		inv = []
+		with open("data/semantic-parser/math_train.tsv", encoding="utf-8") as f:
+			lines = f.readlines()
+			lines.pop(0) # Remove header line from data set
+			for line in lines:
+				words = line.split()
+				first_val = float(re.search(r"\d+", line).group())
+				words.pop(-1)                                        # ignore result
+				inv.append(float(first_val) == float(words.pop(-1))) # check if inverted (y-x != x-y)
+				op = words.pop(-1)                                   # get operator
+				match op:
+					case '+':
+						ops.append('+')
+					case '*':
+						ops.append('*')
+					case '-':
+						ops.append('-')
+					case '/':
+						ops.append('/')
+					case '_':
+						ops.append('+')
+				words.pop(-1)                  # remove the first operand
+				questions.append(" ".join(words))
+
+		question_vectors = [self.get_sentence_representation(question) for question in questions]
+		self.opclassifier.fit(question_vectors, ops)
+		self.invclassifier.fit(question_vectors, inv)
+
 
 	def predict_equation_from_question(self, question):
 		"""
@@ -739,11 +848,29 @@ class MathParser:
 		equation: str
 			The predicted equation.
 		"""
-		# Fill in your code here.
 		eq = ""
-
-		pass
-
+		temp = 0.0
+		values = re.findall(r"\d+", question)
+		if len(values) == 2:
+			x = float(values[0])
+			y = float(values[1])
+			op = self.opclassifier.predict([self.get_sentence_representation(question)])[0]
+			inv = self.invclassifier.predict([self.get_sentence_representation(question)])[0]
+			if inv:
+				temp = x
+				x = y
+				y = temp
+			match op:
+				case '+':
+					eq = str(x)+" + "+str(y)
+				case '*':
+					eq = str(x)+" * "+str(y)
+				case '-':
+					eq = str(x)+" - "+str(y)
+				case '/':
+					eq = str(x)+" / "+str(y)
+		else:
+			eq = "1.0 + 1.0"
 		return eq
 	
 	def ans_evaluator(self, equation):
@@ -801,83 +928,83 @@ class MathParser:
 
 
 
-#####------------- CODE TO TEST YOUR FUNCTIONS FOR SEMANTIC PARSING
+# #####------------- CODE TO TEST YOUR FUNCTIONS FOR SEMANTIC PARSING
 
-print()
-print()
+# print()
+# print()
 
-### PART 1: Text2SQL Parser
+# ### PART 1: Text2SQL Parser
 
-print("======================================================================")
-print("Checking Text2SQL Parser")
-print("======================================================================")
+# print("======================================================================")
+# print("Checking Text2SQL Parser")
+# print("======================================================================")
 
-# Define your text2sql parser object
-sql_parser = Text2SQLParser()
+# # Define your text2sql parser object
+# sql_parser = Text2SQLParser()
 
-# Load the data files
-sql_parser.load_data()
+# # Load the data files
+# sql_parser.load_data()
 
-# Initialize the ML classifier
-sql_parser.init_ml_classifier()
+# # Initialize the ML classifier
+# sql_parser.init_ml_classifier()
 
-# Train the classifier
-sql_parser.train_label_ml_classifier()
+# # Train the classifier
+# sql_parser.train_label_ml_classifier()
 
-# Evaluating the keyword-based label classifier. 
-print("------------- Evaluating keyword-based label classifier -------------")
-accs, _ = sql_parser.evaluate_accuracy(sql_parser.predict_label_using_keywords)
-for label in accs:
-	print(label + ": " + str(accs[label]))
+# # Evaluating the keyword-based label classifier. 
+# print("------------- Evaluating keyword-based label classifier -------------")
+# accs, _ = sql_parser.evaluate_accuracy(sql_parser.predict_label_using_keywords)
+# for label in accs:
+# 	print(label + ": " + str(accs[label]))
 
-# Evaluate the ML classifier
-print("------------- Evaluating ML classifier -------------")
-sql_parser.train_label_ml_classifier()
-_, overall_acc = sql_parser.evaluate_accuracy(sql_parser.predict_label_using_ml_classifier)
-print("Overall accuracy: ", str(overall_acc))
+# # Evaluate the ML classifier
+# print("------------- Evaluating ML classifier -------------")
+# sql_parser.train_label_ml_classifier()
+# _, overall_acc = sql_parser.evaluate_accuracy(sql_parser.predict_label_using_ml_classifier)
+# print("Overall accuracy: ", str(overall_acc))
 
-print()
-print()
+# print()
+# print()
 
 
-### PART 2: Music Assistant Slot Predictor
+# ### PART 2: Music Assistant Slot Predictor
 
-print("======================================================================")
-print("Checking Music Assistant Slot Predictor")
-print("======================================================================")
+# print("======================================================================")
+# print("Checking Music Assistant Slot Predictor")
+# print("======================================================================")
 
-# Define your semantic parser object
-semantic_parser = MusicAsstSlotPredictor()
-# Load semantic parser data
-semantic_parser.load_data()
+# # Define your semantic parser object
+# semantic_parser = MusicAsstSlotPredictor()
+# # Load semantic parser data
+# semantic_parser.load_data()
 
-# Look at the slots
-print("------------- slots -------------")
-semantic_parser.get_slots()
-print(semantic_parser.slot_names)
+# # Look at the slots
+# print("------------- slots -------------")
+# semantic_parser.get_slots()
+# print(semantic_parser.slot_names)
 
-# Evaluate slot predictor
-# Our reference implementation got these numbers on the validation set. You can ask others on Slack what they got.
-# playlist_owner: 100.0
-# music_item: 100.0
-# entity_name: 16.666666666666664
-# artist: 14.285714285714285
-# playlist: 52.94117647058824
-print("------------- Evaluating slot predictor -------------")
-accs = semantic_parser.evaluate_slot_prediction_recall(semantic_parser.predict_slot_values)
-for slot in accs:
-	print(slot + ": " + str(accs[slot]))
+# # Evaluate slot predictor
+# # Our reference implementation got these numbers on the validation set. You can ask others on Slack what they got.
+# # playlist_owner: 100.0
+# # music_item: 100.0
+# # entity_name: 16.666666666666664
+# # artist: 14.285714285714285
+# # playlist: 52.94117647058824
+# print("------------- Evaluating slot predictor -------------")
+# accs = semantic_parser.evaluate_slot_prediction_recall(semantic_parser.predict_slot_values)
+# for slot in accs:
+# 	print(slot + ": " + str(accs[slot]))
 
-# Evaluate Confusion matrix examples
-print("------------- Confusion matrix examples -------------")
-tp, fp, tn, fn = semantic_parser.get_confusion_matrix(semantic_parser.predict_slot_values, semantic_parser.test_questions, semantic_parser.test_answers)
-print(tp)
-print(fp)
-print(tn)
-print(fn)
+# # Evaluate Confusion matrix examples
+# print("------------- Confusion matrix examples -------------")
+# tp, fp, tn, fn = semantic_parser.get_confusion_matrix(semantic_parser.predict_slot_values, semantic_parser.test_questions, semantic_parser.test_answers)
+# print(tp)
+# print(fp)
+# print(tn)
+# print(fn)
 
-print()
-print()
+# print()
+# print()
 
 
 ### PART 3. Math Equation Predictor
