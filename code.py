@@ -7,6 +7,9 @@ import nltk
 from nltk.data import find
 import gensim
 import sklearn
+import sklearn.gaussian_process
+import sklearn.linear_model
+import sklearn.neighbors
 from sympy.parsing.sympy_parser import parse_expr
 
 np.random.seed(0)
@@ -212,74 +215,74 @@ class NgramLM:
 
 
 
-#####------------- CODE TO TEST YOUR FUNCTIONS FOR LANGUAGE MODELING
+# #####------------- CODE TO TEST YOUR FUNCTIONS FOR LANGUAGE MODELING
 
-print("======================================================================")
-print("Checking Language Model")
-print("======================================================================")
+# print("======================================================================")
+# print("Checking Language Model")
+# print("======================================================================")
 
-# Define your language model object
-language_model = NgramLM()
-# Load trigram data
-language_model.load_trigrams()
+# # Define your language model object
+# language_model = NgramLM()
+# # Load trigram data
+# language_model.load_trigrams()
 
-print("------------- Evaluating top next word prediction -------------")
-next_words, probs = language_model.top_next_word("middle", "of", 10)
-for word, prob in zip(next_words, probs):
-	print(word, prob)
-# Your first 5 lines of output should be exactly:
-# a 0.807981220657277
-# the 0.06948356807511737
-# pandemic 0.023943661971830985
-# this 0.016901408450704224
-# an 0.0107981220657277
+# print("------------- Evaluating top next word prediction -------------")
+# next_words, probs = language_model.top_next_word("middle", "of", 10)
+# for word, prob in zip(next_words, probs):
+# 	print(word, prob)
+# # Your first 5 lines of output should be exactly:
+# # a 0.807981220657277
+# # the 0.06948356807511737
+# # pandemic 0.023943661971830985
+# # this 0.016901408450704224
+# # an 0.0107981220657277
 
-print("------------- Evaluating sample next word prediction -------------")
-next_words, probs = language_model.sample_next_word("middle", "of", 10)
-for word, prob in zip(next_words, probs):
-	print(word, prob)
-# My first 5 lines of output look like this: (YOUR OUTPUT CAN BE DIFFERENT!)
-# a 0.807981220657277
-# pandemic 0.023943661971830985
-# august 0.0018779342723004694
-# stage 0.0018779342723004694
-# an 0.0107981220657277
+# print("------------- Evaluating sample next word prediction -------------")
+# next_words, probs = language_model.sample_next_word("middle", "of", 10)
+# for word, prob in zip(next_words, probs):
+# 	print(word, prob)
+# # My first 5 lines of output look like this: (YOUR OUTPUT CAN BE DIFFERENT!)
+# # a 0.807981220657277
+# # pandemic 0.023943661971830985
+# # august 0.0018779342723004694
+# # stage 0.0018779342723004694
+# # an 0.0107981220657277
 
-print("------------- Evaluating beam search -------------")
-sentences, probs = language_model.generate_sentences(prefix="<BOS1> <BOS2> trump", beam=10, sampler=language_model.top_next_word)
-for sent, prob in zip(sentences, probs):
-	print(sent, prob)
-print("#########################\n")
-# Your first 3 lines of output should be exactly:
-# <BOS1> <BOS2> trump eyes new unproven coronavirus treatment URL <EOS> 0.00021893147502903603
-# <BOS1> <BOS2> trump eyes new unproven coronavirus cure URL <EOS> 0.0001719607222046247
-# <BOS1> <BOS2> trump eyes new unproven virus cure promoted by mypillow ceo over unproven therapeutic URL <EOS> 9.773272077557522e-05
+# print("------------- Evaluating beam search -------------")
+# sentences, probs = language_model.generate_sentences(prefix="<BOS1> <BOS2> trump", beam=10, sampler=language_model.top_next_word)
+# for sent, prob in zip(sentences, probs):
+# 	print(sent, prob)
+# print("#########################\n")
+# # Your first 3 lines of output should be exactly:
+# # <BOS1> <BOS2> trump eyes new unproven coronavirus treatment URL <EOS> 0.00021893147502903603
+# # <BOS1> <BOS2> trump eyes new unproven coronavirus cure URL <EOS> 0.0001719607222046247
+# # <BOS1> <BOS2> trump eyes new unproven virus cure promoted by mypillow ceo over unproven therapeutic URL <EOS> 9.773272077557522e-05
 
-sentences, probs = language_model.generate_sentences(prefix="<BOS1> <BOS2> biden", beam=10, sampler=language_model.top_next_word)
-for sent, prob in zip(sentences, probs):
-	print(sent, prob)
-print("#########################\n")
-# Your first 3 lines of output should be exactly:
-# <BOS1> <BOS2> biden calls for a 30 bonus URL #cashgem #cashappfriday #stayathome <EOS> 0.0002495268686322749
-# <BOS1> <BOS2> biden says all u.s. governors should mandate masks <EOS> 1.6894510541025754e-05
-# <BOS1> <BOS2> biden says all u.s. governors question cost of a pandemic <EOS> 8.777606198953028e-07
+# sentences, probs = language_model.generate_sentences(prefix="<BOS1> <BOS2> biden", beam=10, sampler=language_model.top_next_word)
+# for sent, prob in zip(sentences, probs):
+# 	print(sent, prob)
+# print("#########################\n")
+# # Your first 3 lines of output should be exactly:
+# # <BOS1> <BOS2> biden calls for a 30 bonus URL #cashgem #cashappfriday #stayathome <EOS> 0.0002495268686322749
+# # <BOS1> <BOS2> biden says all u.s. governors should mandate masks <EOS> 1.6894510541025754e-05
+# # <BOS1> <BOS2> biden says all u.s. governors question cost of a pandemic <EOS> 8.777606198953028e-07
 
-sentences, probs = language_model.generate_sentences(prefix="<BOS1> <BOS2> trump", beam=10, sampler=language_model.sample_next_word)
-for sent, prob in zip(sentences, probs):
-	print(sent, prob)
-print("#########################\n")
-# My first 3 lines of output look like this: (YOUR OUTPUT CAN BE DIFFERENT!)
-# <BOS1> <BOS2> trump eyes new unproven coronavirus treatment URL <EOS> 0.00021893147502903603
-# <BOS1> <BOS2> trump eyes new unproven coronavirus cure URL <EOS> 0.0001719607222046247
-# <BOS1> <BOS2> trump eyes new unproven virus cure promoted by mypillow ceo over unproven therapeutic URL <EOS> 9.773272077557522e-05
+# sentences, probs = language_model.generate_sentences(prefix="<BOS1> <BOS2> trump", beam=10, sampler=language_model.sample_next_word)
+# for sent, prob in zip(sentences, probs):
+# 	print(sent, prob)
+# print("#########################\n")
+# # My first 3 lines of output look like this: (YOUR OUTPUT CAN BE DIFFERENT!)
+# # <BOS1> <BOS2> trump eyes new unproven coronavirus treatment URL <EOS> 0.00021893147502903603
+# # <BOS1> <BOS2> trump eyes new unproven coronavirus cure URL <EOS> 0.0001719607222046247
+# # <BOS1> <BOS2> trump eyes new unproven virus cure promoted by mypillow ceo over unproven therapeutic URL <EOS> 9.773272077557522e-05
 
-sentences, probs = language_model.generate_sentences(prefix="<BOS1> <BOS2> biden", beam=10, sampler=language_model.sample_next_word)
-for sent, prob in zip(sentences, probs):
-	print(sent, prob)
-# My first 3 lines of output look like this: (YOUR OUTPUT CAN BE DIFFERENT!)
-# <BOS1> <BOS2> biden is elected <EOS> 0.001236227651321991
-# <BOS1> <BOS2> biden dropping ten points given trump a confidence trickster URL <EOS> 5.1049579351466146e-05
-# <BOS1> <BOS2> biden dropping ten points given trump four years <EOS> 4.367575122292103e-05
+# sentences, probs = language_model.generate_sentences(prefix="<BOS1> <BOS2> biden", beam=10, sampler=language_model.sample_next_word)
+# for sent, prob in zip(sentences, probs):
+# 	print(sent, prob)
+# # My first 3 lines of output look like this: (YOUR OUTPUT CAN BE DIFFERENT!)
+# # <BOS1> <BOS2> biden is elected <EOS> 0.001236227651321991
+# # <BOS1> <BOS2> biden dropping ten points given trump a confidence trickster URL <EOS> 5.1049579351466146e-05
+# # <BOS1> <BOS2> biden dropping ten points given trump four years <EOS> 4.367575122292103e-05
 
 
 
@@ -330,10 +333,24 @@ class Text2SQLParser:
 		label: str
 			The predicted label.
 		"""
-		# Fill in your code here.
-		label = ""
 		
-		return label
+		multi_table_keywords = ["that have", "that never", "not have", "who have", "who never", "have never"
+			"who took", "that took", "who are", "that are", "part of", "relate", "for all", "for the",
+			"of all the", "correspond", "the different", ", and"]
+
+		ordering_keywords = ["alphabetical", "ascending", "decreasing", "descending", "in order", "order by", "sort",
+			"ordered by", "ordered in", "lexicographic"]
+		
+		grouping_keywords = ["many", "number of", "more", "less", "most", "least" "sum", "average", "count",
+			"one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "min", "max", "highest", "lowest"]
+
+		if any(keyword in question for keyword in ordering_keywords):
+			return 'ordering'
+		if any(keyword in question for keyword in multi_table_keywords):
+			return 'multi_table'
+		if any(keyword in question for keyword in grouping_keywords):
+			return 'grouping'
+		return 'comparison'
 
 	def evaluate_accuracy(self, prediction_function_name):
 		"""
@@ -384,7 +401,16 @@ class Text2SQLParser:
 		"""
 		# Fill in your code here
 		sentence_vector = np.zeros(300)
+		split = sentence.split()
 
+		word_vecs = []
+		
+		for word in split:
+			if word in self.word2vec_model:
+				word_vecs.append(self.word2vec_model[word])
+
+		sentence_vector = np.average(np.array(word_vecs), axis=0)
+			
 		return sentence_vector
 	
 	def init_ml_classifier(self):
@@ -397,8 +423,14 @@ class Text2SQLParser:
 		Returns
 		-------
 		"""
-		# Fill in your code here
-		self.classifier = None
+
+		# self.classifier = sklearn.svm.SVC(gamma=2, C=1)                                # 76.2
+		# self.classifier = sklearn.svm.SVC(gamma=1, C=1)                                # 68.3
+		# self.classifier = sklearn.svm.SVC(gamma=10, C=1)                               # 81.0
+		# self.classifier = sklearn.svm.SVC(gamma=2, C=2)                                # 79.4
+		# self.classifier = sklearn.svm.SVC(gamma=2, C=5)                                # 81.0
+		# self.classifier = sklearn.svm.SVC(gamma=2, C=50)                               # 84.1
+		self.classifier = sklearn.svm.SVC(gamma=10, C=5)                               # 82.5
 	
 	def train_label_ml_classifier(self):
 		"""
@@ -410,8 +442,19 @@ class Text2SQLParser:
 		Returns
 		-------
 		"""
-		# Fill in your code here
-		pass
+		sentences = []
+		labels = []
+		with open("data/semantic-parser/sql_train.tsv", encoding="utf-8") as f:
+			lines = f.readlines()
+			lines.pop(0) # Remove header line from data set
+			for line in lines:
+				labels.append(line.split().pop(-1)) # Last word is label
+				words = line.split("|")[0].split()  # Words up until first '|' taken
+				words.pop(0)                        # Remove first word, which is a label
+				sentences.append(" ".join(words))   # Join the words into a string
+
+		sentence_vectors = [self.get_sentence_representation(sentence) for sentence in sentences]
+		self.classifier.fit(sentence_vectors, labels)
 	
 	def predict_label_using_ml_classifier(self, question):
 		"""
@@ -427,8 +470,7 @@ class Text2SQLParser:
 		predicted_label: str
 			The predicted label.
 		"""
-		# Fill in your code here
-		predicted_label = ""
+		predicted_label = self.classifier.predict([self.get_sentence_representation(question)])[0]
 
 		return predicted_label
 
@@ -502,13 +544,54 @@ class MusicAsstSlotPredictor:
 		slots: dict
 			The predicted slots.
 		"""
-		words = question.split()
 		slots = {}
 		for slot_name in self.slot_names:
 			slots[slot_name] = None
-		for slot_name in self.slot_names:
-			# Fill in your code to idenfity the slot value. By default, they are initialized to None.
-			pass
+
+		# playlist and playlist_owner
+		# Case 1
+		playlist_match = re.search(" (my|the|a|[^ ]+'s) playlist .*(named|called|name) ", question)
+		if playlist_match is None: # Case 2
+			playlist_match = re.search(" (my|the|a|[^ ]+'s) playlist ", question)
+		if playlist_match is None: # Case 3
+			playlist_match = re.search(" (my|the|a|[^ ]+'s) .+ playlist ", question)
+		if playlist_match is None: # Case 4
+			playlist_match = re.search(" (my|[^ ]+'s) .+", question)
+		if playlist_match is not None: # If any match was found
+			playlist = playlist_match.group().split()
+			playlist_owner = playlist.pop(0)
+			if "'" in playlist_owner:
+				playlist_owner = playlist_owner[:-2]
+			slots['playlist_owner'] = playlist_owner
+
+			if playlist[0] == "playlist":    # Cases 1 and 2
+				slots['playlist'] = question[playlist_match.end():]
+			elif playlist[len(playlist)-1] == "playlist": # Case 3
+				playlist.pop(-1)
+				slots['playlist'] = " ".join(playlist)
+			else:                            # Case 4
+				slots['playlist'] = " ".join(playlist)
+
+		# artist
+		artist_match = re.search(" [A-Z][a-z]+ [A-Z][a-z]+ ", question)
+		if artist_match is not None:
+			slots['artist'] = artist_match.group()[1:-1]
+
+		# music_item
+		music_items = ["album", "song", "track", "tune", "artist"]
+		for music_item in music_items:
+			if music_item in question:
+				slots['music_item'] = music_item
+
+		# entity_name
+		music_item_match = re.search("([Aa]dd|[Pp]ut) .+ (to|in|into|on|onto) ", question)
+		if music_item_match is not None:
+			selected_words = music_item_match.group().split()[1:-1]
+			if not any(music_item in selected_words for music_item in music_items):
+				slots['entity_name'] = " ".join(selected_words)
+			if slots['playlist'] is None:
+				slots['playlist'] = question[music_item_match.end():]
+
 		return slots
 	
 	def get_confusion_matrix(self, slot_prediction_function, questions, answers):
@@ -547,9 +630,21 @@ class MusicAsstSlotPredictor:
 			tn[slot_name] = []
 		for slot_name in self.slot_names:
 			fn[slot_name] = []
+
 		for i, question in enumerate(questions):
-			# Fill in your code here
-			pass
+			prediction = slot_prediction_function(question)
+			for slot_name in self.slot_names:
+				if prediction[slot_name] is not None:
+					if slot_name in answers[i]['slots']:
+						tp[slot_name].append(i)
+					else:
+						fp[slot_name].append(i)
+				else:
+					if slot_name not in answers[i]['slots']:
+						tn[slot_name].append(i)
+					else:
+						fn[slot_name].append(i)
+
 		return tp, fp, tn, fn
 	
 	def evaluate_slot_prediction_recall(self, slot_prediction_function):
